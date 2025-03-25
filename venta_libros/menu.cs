@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 
 namespace venta_libros
 {
@@ -6,7 +7,7 @@ namespace venta_libros
     {
         public static void MostrarAscii()
         {
-            Console.ForegroundColor = ConsoleColor.Cyan; 
+            Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine(@"
                            .--.                   .---.
                        .---|__|           .-.     |~~~|
@@ -19,7 +20,7 @@ namespace venta_libros
                     |  |===|--|   \.'\|===|~|--|%%|~~~|--|
                     ^--^---'--^    `-'`---^-^--^--^---'--'
                  ");
-            Console.WriteLine("\n============================================\n Bienvenido al Sistema de Libros \n============================================");
+            //Console.WriteLine("\n============================================\n Bienvenido al Sistema de Libros \n============================================");
             Console.ResetColor();
 
         }
@@ -29,7 +30,26 @@ namespace venta_libros
             Console.WriteLine("\n===== MENÚ PRINCIPAL =====");
             Console.ResetColor();
             Console.WriteLine("1. Registrar Venta\n2. Mostrar Inventario\n3. Agregar Libro\n4. Actualizar Stock\n5. Mostrar ventas\n6. Salir");
-            Console.Write("Seleccione una opción: ");
+
+        }
+
+        public static void MostrarInventario()
+        {
+            Console.Clear();
+            MostrarAscii();
+            Console.WriteLine("=== INVENTARIO DE LIBROS ===\n");
+            Console.WriteLine("Id  | Titulo                          | Stock   | Precio  ");
+            Console.WriteLine("-------------------------------------------------------");
+            for (int i = 0; i < Program.numLibros; i++)
+            {   //es limpio,facil de leer y mas flexible, ya que nos permite escribir expresiones dentro de las llaves. 
+                //Esto permite insertar valores de variables directamente dentro de una cadena, utilizando {}.
+                Console.WriteLine($"{i + 1,-3} |  {Program.inventario[i, 0],-30} |  {Program.inventario[i, 1],-6} |  ${Program.inventario[i, 2]}");
+            }
+            if (Program.numLibros == 0)
+            {
+                Console.WriteLine("No hay libros en el inventario");
+            }
+
         }
 
 
@@ -38,69 +58,66 @@ namespace venta_libros
             Console.Clear();
             MostrarAscii();
             Console.WriteLine("=== REGISTRAR VENTA ===\n");
-            MostrarInventario(false);
+            MostrarInventario();
 
-            Console.Write("\nIngrese el número del libro a vender: ");
-            int indice = Convert.ToInt32(Console.ReadLine()) - 1;
+            // Leer el índice del libro con validación
+            int IdLibro = LeerEntero("\nIngrese el número del libro a vender: ", 1, Program.numLibros) - 1;
+            int stockActual = Convert.ToInt32(Program.inventario[IdLibro, 1]);
 
-            if (indice >= 0 && indice < Program.numLibros)
+            // Leer la cantidad a vender con validación
+            int cantidad = LeerEntero("Ingrese la cantidad a vender: ", 1, stockActual);
+
+            // Actualizar el stock
+            stockActual -= cantidad;
+            Program.inventario[IdLibro, 1] = stockActual.ToString();
+
+            // Crear nueva matriz de ventas
+            string[,] temp = new string[Program.numVentas + 1, 3];
+
+            // Copiar datos antiguos
+            for (int i = 0; i < Program.numVentas; i++)
             {
-                Console.Write("Ingrese la cantidad a vender: ");
-                int cantidad = Convert.ToInt32(Console.ReadLine());
-                int stockActual = Convert.ToInt32(Program.inventario[indice, 1]);
-
-                if (cantidad > 0 && cantidad <= stockActual)
+                for (int j = 0; j < 3; j++)
                 {
-                    // Actualizar stock
-                    stockActual -= cantidad;
-                    Program.inventario[indice, 1] = stockActual.ToString();
-
-                    // Agregar a ventas (ampliamos el array)
-                    string[,] nuevasVentas = new string[Program.numVentas + 1, 3];
-                    for (int i = 0; i < Program.numVentas; i++)
-                    {
-                        nuevasVentas[i, 0] = Program.ventas[i, 0];
-                        nuevasVentas[i, 1] = Program.ventas[i, 1];
-                        nuevasVentas[i, 2] = Program.ventas[i, 2];
-                    }
-
-                    // Precio total = cantidad * precio unitario
-                    double precioUnitario = Convert.ToDouble(Program.inventario[indice, 2]);
-                    double precioTotal = cantidad * precioUnitario;
-
-                    nuevasVentas[Program.numVentas, 0] = Program.inventario[indice, 0];
-                    nuevasVentas[Program.numVentas, 1] = cantidad.ToString();
-                    nuevasVentas[Program.numVentas, 2] = precioTotal.ToString("F2");
-
-                    Program.ventas = nuevasVentas;
-                    Program.numVentas++;
-
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine($"\nVenta registrada: {cantidad} unidades de '{Program.inventario[indice, 0]}' por ${precioTotal}");
-                    Console.ResetColor();
-
-                    // Alerta de stock bajo
-                    if (stockActual < 5)
-                    {
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine($"ALERTA: El stock de '{Program.inventario[indice, 0]}' es bajo ({stockActual} unidades). Considera reabastecer.");
-                        Console.ResetColor();
-                    }
-
-                    // Guardar datos después de cada venta
-                    Program.GuardarDatosCSV();
+                    temp[i, j] = Program.ventas[i, j];
                 }
-                else
+            }
+
+            try
+            {
+                double precioUnitario = Convert.ToDouble(Program.inventario[IdLibro, 2]);
+                double precioTotal = cantidad * precioUnitario;
+
+                // Registrar nueva venta
+                temp[Program.numVentas, 0] = Program.inventario[IdLibro, 0];
+                temp[Program.numVentas, 1] = cantidad.ToString();
+                temp[Program.numVentas, 2] = precioTotal.ToString("F2");
+
+                Program.ventas = temp;
+                Program.numVentas++;
+
+                // Guardar en archivo CSV
+                using (StreamWriter sw = new StreamWriter(Program.archivoVentas, true))
+                {
+                    sw.WriteLine($"{Program.inventario[IdLibro, 0]},{cantidad},{precioTotal}");
+                }
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"\nVenta registrada: {cantidad} unidades de '{Program.inventario[IdLibro, 0]}' por ${precioTotal}");
+                Console.ResetColor();
+
+                // Alerta de stock bajo
+                if (stockActual < 5)
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("Cantidad inválida o insuficiente stock.");
+                    Console.WriteLine($"ALERTA: El stock de '{Program.inventario[IdLibro, 0]}' es bajo ({stockActual} unidades). Considera reabastecer.");
                     Console.ResetColor();
                 }
             }
-            else
+            catch (FormatException)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("Número de libro inválido.");
+                Console.WriteLine("Error al procesar el precio del libro.");
                 Console.ResetColor();
             }
 
@@ -108,34 +125,38 @@ namespace venta_libros
             Console.ReadKey();
             Console.Clear();
             MostrarAscii();
-
         }
 
-        public static void MostrarInventario(bool pausar = true)
+        // Función para leer un número entero con validación
+        static int LeerEntero(string mensaje, int min, int max)
         {
-            Console.Clear();
-            MostrarAscii();
-            Console.WriteLine("=== INVENTARIO DE LIBROS ===\n");
-            Console.WriteLine("Id  | Titulo                        | Stock  | Precio  ");
-            Console.WriteLine("-------------------------------------------------------");
-            for (int i = 0; i < Program.numLibros; i++)
+            while (true)
             {
-                Console.WriteLine($"{i + 1,-3} |  {Program.inventario[i, 0],-28} |  {Program.inventario[i, 1],-6} |  ${Program.inventario[i, 2]}");
-
-
+                Console.Write(mensaje);
+                try
+                {
+                    int numero = Convert.ToInt32(Console.ReadLine());
+                    if (numero >= min && numero <= max)
+                    {
+                        return numero; // Siempre devuelve un valor si es válido
+                    }
+                    else
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"Error: Ingresa un número entre {min} y {max}.");
+                        Console.ResetColor();
+                    }
+                }
+                catch (FormatException)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("Error: Ingrese un número válido.");
+                    Console.ResetColor();
+                }
             }
-            /*if (Program.numLibros == 0)
-            {
-                Console.WriteLine("No hay libros en el inventario");
-            }*/
-            if (pausar)
-            {
-            Console.WriteLine("Precione cualquier tecla para continuar");
-            Console.ReadKey();
-            Console.Clear();
-            }
-
         }
+
+
 
         public static void AgregarLibro()
         {
@@ -145,16 +166,48 @@ namespace venta_libros
             Console.Write("Ingrese el nombre del nuevo libro: ");
             string titulo = Console.ReadLine();
 
-            Console.Write("Ingrese la cantidad en stock: ");
-            string cantidad = Console.ReadLine();
+            int cantidad = 0;
+            bool cantidadValida = false;
 
-            Console.Write("Ingrese el precio por unidad: ");
-            string precio = Console.ReadLine();
+            while (!cantidadValida)
+            {
+                Console.Write("Ingrese la cantidad en stock: ");
+                try
+                {
+                    cantidad = Convert.ToInt32(Console.ReadLine());
+                    cantidadValida = true;
+                }
+                catch (FormatException)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("Error: Ingrese un número entero válido para la cantidad.");
+                    Console.ResetColor();
+                }
+            }
 
-            // Crear una nueva matriz con un tamaño mayor
+            int precio = 0;
+            bool precioValido = false;
+
+            while (!precioValido)
+            {
+                Console.Write("Ingrese el precio por unidad (solo numeros enteros, sin puntos ni comas): ");
+                try
+                {
+                    precio = Convert.ToInt32(Console.ReadLine());
+                    precioValido = true;
+                }
+                catch (FormatException)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("Error: El precio debe ser un número entero sin puntos ni comas.");
+                    Console.ResetColor();
+                }
+            }
+
+
             string[,] nuevoInventario = new string[Program.numLibros + 1, 3];
 
-            // Copiar los datos de la matriz original
+
             for (int i = 0; i < Program.numLibros; i++)
             {
                 nuevoInventario[i, 0] = Program.inventario[i, 0];
@@ -162,21 +215,21 @@ namespace venta_libros
                 nuevoInventario[i, 2] = Program.inventario[i, 2];
             }
 
-            // Agregar el nuevo libro 
-            nuevoInventario[Program.numLibros, 0] = titulo;
-            nuevoInventario[Program.numLibros, 1] = cantidad;
-            nuevoInventario[Program.numLibros, 2] = precio;
 
-            // Reemplazar la matriz original con la nueva
+            nuevoInventario[Program.numLibros, 0] = titulo;
+            nuevoInventario[Program.numLibros, 1] = cantidad.ToString();
+            nuevoInventario[Program.numLibros, 2] = precio.ToString();
+
+
             Program.inventario = nuevoInventario;
             Program.numLibros++;
 
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"Libro '{titulo}' agregado correctamente.");
+            Console.WriteLine($"El libro '{titulo}' agregado correctamente.");
             Console.ResetColor();
 
-            // Guardar datos después de agregar un libro
-            Program.GuardarDatosCSV();
+
+            GuardarDatosCSV();
 
             Console.WriteLine("\nPresione cualquier tecla para continuar...");
             Console.ReadKey();
@@ -188,41 +241,95 @@ namespace venta_libros
             Console.Clear();
             Console.WriteLine("=== ACTUALIZAR STOCK ===");
             MostrarInventario();
-            Console.Write("Ingrese el número del libro al que desea actualizar stock: ");
-            int i = Convert.ToInt32(Console.ReadLine()) - 1;
 
-            if (i >= 0 && i < Program.numLibros)
+            int i = -1;
+            bool librovalido = false;
+            while (!librovalido)
+            {
+                Console.Write("Ingrese el número del libro al que desea actualizar stock: ");
+                try
+                {
+                    i = Convert.ToInt32(Console.ReadLine()) - 1;
+
+                    if (i >= 0 && i < Program.numLibros)
+                    {
+                        librovalido = true;
+                    }
+                    else
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("Número de libro no valido. Intete de nuevo");
+                        Console.ResetColor();
+                    }
+                }
+                catch (FormatException)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("Error: Ingrese un numero valido.");
+                    Console.ResetColor();
+                }
+
+            }
+            int cantidadAdicional = 0;
+            bool cantidadValida = false;
+
+            while (!cantidadValida)
             {
                 Console.Write($"Ingrese la cantidad adicional para '{Program.inventario[i, 0]}': ");
-                int cantidadAdicional = Convert.ToInt32(Console.ReadLine());
-
-                int stockActual = Convert.ToInt32(Program.inventario[i, 1]);
-                stockActual += cantidadAdicional; // Sumamos el stock nuevo al existente
-                Program.inventario[i, 1] = stockActual.ToString(); // Actualizamos en la matriz
-
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"Stock actualizado. Ahora '{Program.inventario[i, 0]}' tiene {stockActual} unidades.");
-                Console.ResetColor();
-                Console.Write($"Precio actual de '{Program.inventario[i, 0]}': ${Program.inventario[i, 2]}\n");
-                Console.Write("¿Desea actualizar el precio? (S/N): ");
-                if (Console.ReadLine().ToUpper() == "S"){
-                    Console.Write("Ingrese el nuevo precio: ");
-                    string nuevoprecio = Console.ReadLine();
-                    Program.inventario[i, 2] = nuevoprecio;
+                try
+                {
+                    cantidadAdicional = Convert.ToInt32(Console.ReadLine());
+                    cantidadValida = true;
                 }
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("\n Stock de: " + Program.inventario[i, 0] + "actualizado correctamente.");
-                Console.ResetColor();
+                catch (FormatException)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("Error: Ingrese un número entero válido.");
+                    Console.ResetColor();
+                }
+            }
+            int stockActual = Convert.ToInt32(Program.inventario[i, 1]);
+            stockActual += cantidadAdicional;
+            Program.inventario[i, 1] = stockActual.ToString();
 
-                Program.GuardarDatosCSV();
-            }
-            else
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"Stock actualizado. Ahora '{Program.inventario[i, 0]}' tiene {stockActual} unidades.");
+            Console.ResetColor();
+
+            Console.Write($"Precio actual de '{Program.inventario[i, 0]}': ${Program.inventario[i, 2]}\n");
+            Console.Write("¿Desea actualizar el precio? (S/N): ");
+
+            if (Console.ReadLine().ToUpper() == "S")
             {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("Número de libro no válido.");
-                Console.ResetColor();
+                int nuevoPrecio = 0;
+                bool precioValido = false;
+
+                while (!precioValido)
+                {
+                    Console.Write("Ingrese el nuevo precio (solo números enteros, sin puntos ni comas): ");
+                    try
+                    {
+                        nuevoPrecio = Convert.ToInt32(Console.ReadLine());
+                        precioValido = true;
+                    }
+                    catch (FormatException)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("Error: El precio debe ser un número entero sin puntos ni comas.");
+                        Console.ResetColor();
+                    }
+                }
+
+                Program.inventario[i, 2] = nuevoPrecio.ToString();
             }
-            Console.WriteLine("\nPresione cualquier tecla para continuar");
+
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"\nStock de '{Program.inventario[i, 0]}' actualizado correctamente.");
+            Console.ResetColor();
+
+            GuardarDatosCSV();
+
+            Console.WriteLine("\nPresione cualquier tecla para continuar...");
             Console.ReadKey();
             Console.Clear();
         }
@@ -250,11 +357,80 @@ namespace venta_libros
             else
             {
                 Console.WriteLine("--------------------------------------------------");
-                Console.WriteLine($"Total de ventas: ${totalVentas:F2}");
+                Console.WriteLine($"Total de ventas: ${totalVentas}");
             }
             Console.WriteLine("\nPresione cualquier tecla para continuar...");
             Console.ReadKey();
             Console.Clear();
+        }
+
+        public static void CargarDatosDesdeCSV()
+        {
+            if (File.Exists(Program.archivoInventario))
+            {
+                string[] lineas = File.ReadAllLines(Program.archivoInventario);
+
+                if (lineas.Length == 0)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("El archivo de inventario está vacío o solo tiene encabezados.");
+                    Console.ResetColor();
+                    return;
+                }
+
+                string[] primeraFila = lineas[0].Split(',');
+                int numColumnas = primeraFila.Length;
+
+                Program.numLibros = lineas.Length;
+
+                Program.inventario = new string[Program.numLibros, numColumnas];
+
+                int filaInventario = 0;
+
+                for (int i = 0; i < lineas.Length; i++)
+                {
+                    string[] datos = lineas[i].Split(',');
+
+                    if (datos.Length == numColumnas)
+                    {
+                        for (int j = 0; j < numColumnas; j++)
+                        {
+                            Program.inventario[filaInventario, j] = datos[j].Trim();
+                        }
+                        filaInventario++;
+                    }
+                }
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("...");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("El archivo no existe.");
+                Console.ResetColor();
+            }
+        }
+
+
+
+        public static void GuardarInventarioCSV()
+        {
+            if (Program.numLibros > 0)
+            {
+                string[] lineas = new string[Program.numLibros];
+                for (int i = 0; i < Program.numLibros; i++)
+                {
+                    lineas[i] = Program.inventario[i, 0] + "," + Program.inventario[i, 1] + "," + Program.inventario[i, 2];
+                }
+                File.WriteAllLines(Program.archivoInventario, lineas);
+            }
+        }
+
+        public static void GuardarDatosCSV()
+        {
+            GuardarInventarioCSV();
         }
     }
 }
